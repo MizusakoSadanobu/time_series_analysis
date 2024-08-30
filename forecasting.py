@@ -1,16 +1,20 @@
 import numpy as np
 import pandas as pd
-from abc import ABC, abstractmethod
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from statsmodels.tsa.arima.model import ARIMA
+from statsmodels.tsa.statespace.sarimax import SARIMAX
+from prophet import Prophet
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
-# 抽象クラスの定義
-class ForecastingModel(ABC):
+# モデルの抽象クラス
+class ForecastingModel:
     def __init__(self, df, test_size=0.25, future_steps=30):
         self.df = df
         self.test_size = test_size
         self.future_steps = future_steps
         self._prepare_data()
-
+    
     def _prepare_data(self):
         self.df['diff'] = self.df['y'].diff().fillna(0)
         self.df['day'] = np.arange(len(self.df))
@@ -18,21 +22,18 @@ class ForecastingModel(ABC):
         X = self.df[['day']]
         y = self.df['diff']
         self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(X, y, test_size=self.test_size, shuffle=False)
-
-    @abstractmethod
+    
     def forecast(self):
-        pass
-
-    def calculate_errors(self, y_test, y_pred):
-        mae = mean_absolute_error(y_test, y_pred)
-        rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+        raise NotImplementedError
+    
+    def calculate_errors(self, y_true, y_pred):
+        mae = mean_absolute_error(y_true, y_pred)
+        rmse = np.sqrt(mean_squared_error(y_true, y_pred))
         return mae, rmse
 
-# 線形回帰モデル
+# 各モデルの実装
 class LinearRegressionModel(ForecastingModel):
     def forecast(self):
-        from sklearn.linear_model import LinearRegression
-
         model_lr = LinearRegression()
         model_lr.fit(self.X_train, self.y_train)
         
@@ -54,11 +55,8 @@ class LinearRegressionModel(ForecastingModel):
         
         return y_pred[-len(self.y_test):], future_dates, future_preds
 
-# ARIMAモデル
 class ARIMAModel(ForecastingModel):
     def forecast(self):
-        from statsmodels.tsa.arima.model import ARIMA
-
         model_arima = ARIMA(self.df['y'], order=(5,1,0))
         arima_result = model_arima.fit()
         
@@ -68,11 +66,8 @@ class ARIMAModel(ForecastingModel):
         
         return forecast_arima, future_dates, future_forecast_arima
 
-# SARIMAモデル
 class SARIMAModel(ForecastingModel):
     def forecast(self):
-        from statsmodels.tsa.statespace.sarimax import SARIMAX
-
         sarima_model = SARIMAX(self.df['y'], order=(1,1,1), seasonal_order=(1,1,1,12))
         sarima_result = sarima_model.fit()
         
@@ -82,11 +77,8 @@ class SARIMAModel(ForecastingModel):
         
         return forecast_sarima, future_dates, future_forecast_sarima
 
-# Prophetモデル
 class ProphetModel(ForecastingModel):
     def forecast(self):
-        from prophet import Prophet
-
         model = Prophet()
         model.fit(self.df)
         
